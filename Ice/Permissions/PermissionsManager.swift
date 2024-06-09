@@ -27,7 +27,7 @@ class PermissionsManager: ObservableObject {
         var c = Set<AnyCancellable>()
 
         accessibilityPermission.$hasPermission
-            .combineLatest(screenRecordingPermission.$hasPermission)
+            .combineLatest(Just(true))
             .sink { [weak self] hasPermission1, hasPermission2 in
                 self?.hasPermission = hasPermission1 && hasPermission2
             }
