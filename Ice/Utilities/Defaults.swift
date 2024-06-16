@@ -137,6 +137,7 @@ extension Defaults {
         case showIceIcon = "ShowIceIcon"
         case iceIcon = "IceIcon"
         case customIceIconIsTemplate = "CustomIceIconIsTemplate"
+        case useIceBar = "UseIceBar"
         case showOnClick = "ShowOnClick"
         case showOnHover = "ShowOnHover"
         case showOnScroll = "ShowOnScroll"
@@ -157,6 +158,10 @@ extension Defaults {
         // MARK: Menu Bar Appearance Settings
 
         case menuBarAppearanceConfiguration = "MenuBarAppearanceConfiguration"
+
+        // MARK: Ice Bar Settings
+
+        case iceBarPinnedLocation = "IceBarPinnedLocation"
 
         // MARK: Migration
 

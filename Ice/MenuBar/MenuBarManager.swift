@@ -10,11 +10,15 @@ import SwiftUI
 /// Manager for the state of the menu bar.
 @MainActor
 final class MenuBarManager: ObservableObject {
+    @Published private(set) var averageColor: CGColor?
+
     private(set) weak var appState: AppState?
 
     private(set) var sections = [MenuBarSection]()
 
     let appearanceManager: MenuBarAppearanceManager
+
+    let iceBarPanel: IceBarPanel
 
     private let encoder = JSONEncoder()
 
@@ -24,11 +28,14 @@ final class MenuBarManager: ObservableObject {
 
     private var isHidingApplicationMenus = false
 
+    private var canUpdateAverageColor = false
+
     private var cancellables = Set<AnyCancellable>()
 
     /// Initializes a new menu bar manager instance.
     init(appState: AppState) {
         self.appearanceManager = MenuBarAppearanceManager(appState: appState)
+        self.iceBarPanel = IceBarPanel(appState: appState)
         self.appState = appState
     }
 
@@ -92,8 +99,40 @@ final class MenuBarManager: ObservableObject {
             }
             .store(in: &c)
 
+        if
+            let appState,
+            let settingsWindow = appState.settingsWindow
+        {
+            Publishers.CombineLatest(
+                settingsWindow.publisher(for: \.isVisible),
+                iceBarPanel.publisher(for: \.isVisible)
+            )
+            .sink { [weak self] settingsIsVisible, iceBarIsVisible in
+                guard let self else {
+                    return
+                }
+                if settingsIsVisible || iceBarIsVisible {
+                    canUpdateAverageColor = true
+                    updateAverageColor()
+                } else {
+                    canUpdateAverageColor = false
+                }
+            }
+            .store(in: &c)
+        }
+
+        Timer.publish(every: 5, on: .main, in: .default)
+            .autoconnect()
+            .sink { [weak self] _ in
+                guard let self else {
+                    return
+                }
+                updateAverageColor()
+            }
+            .store(in: &c)
+
         // hide application menus when a section is shown (if applicable)
-        Publishers.MergeMany(sections.map { $0.$isHidden })
+        Publishers.MergeMany(sections.map { $0.controlItem.$state })
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
@@ -120,12 +159,11 @@ final class MenuBarManager: ObservableObject {
                         return
                     }
 
+                    let items = MenuBarItem.getMenuBarItems(for: displayID, onScreenOnly: true)
+
                     // get the leftmost item on the screen; the application menu should
                     // be hidden if the item's minX is close to the maxX of the menu
-                    guard
-                        let items = try? MenuBarItem.getMenuBarItems(for: displayID, onScreenOnly: true),
-                        let leftmostItem = items.min(by: { $0.frame.minX < $1.frame.minX })
-                    else {
+                    guard let leftmostItem = items.min(by: { $0.frame.minX < $1.frame.minX }) else {
                         return
                     }
 
@@ -160,6 +198,20 @@ final class MenuBarManager: ObservableObject {
         }
 
         cancellables = c
+    }
+
+    func updateAverageColor() {
+        guard canUpdateAverageColor else {
+            return
+        }
+        guard
+            let screen = NSScreen.main,
+            let desktopWallpaper = ScreenCapture.desktopWallpaperBelowMenuBar(for: screen.displayID),
+            let averageColor = desktopWallpaper.averageColor(resolution: .low)
+        else {
+            return
+        }
+        self.averageColor = averageColor
     }
 
     /// Returns the frames of each item in the application menu for the given display.

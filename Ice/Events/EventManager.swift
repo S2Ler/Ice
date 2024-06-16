@@ -169,6 +169,11 @@ final class EventManager {
             return event
         }
 
+        // make sure clicking the Ice Bar doesn't trigger rehide
+        guard event.window !== appState.menuBarManager.iceBarPanel else {
+            return event
+        }
+
         // only continue if the "hidden" section is currently visible
         guard
             let hiddenSection = appState.menuBarManager.section(withName: .hidden),
@@ -191,7 +196,7 @@ final class EventManager {
                 guard
                     let mouseLocation = self.getMouseLocation(flipped: true),
                     let windowUnderMouse = try WindowInfo.getOnScreenWindows(excludeDesktopWindows: false)
-                        .filter({ $0.windowLayer < CGWindowLevelForKey(.cursorWindow) })
+                        .filter({ $0.layer < CGWindowLevelForKey(.cursorWindow) })
                         .first(where: { $0.frame.contains(mouseLocation) }),
                     let owningApplication = windowUnderMouse.owningApplication
                 else {
@@ -306,6 +311,11 @@ final class EventManager {
             return event
         }
 
+        // don't continue if using the Ice Bar
+        guard !appState.settingsManager.generalSettingsManager.useIceBar else {
+            return event
+        }
+
         // make sure the command key is down
         guard event.modifierFlags.contains(.command) else {
             return event
@@ -362,11 +372,17 @@ final class EventManager {
         self.appState = appState
     }
 
-    // MARK: - Setup
+    // MARK: - Start/Stop
 
-    func performSetup() {
+    func startAll() {
         for monitor in allMonitors {
             monitor.start()
+        }
+    }
+
+    func stopAll() {
+        for monitor in allMonitors {
+            monitor.stop()
         }
     }
 
@@ -416,11 +432,11 @@ final class EventManager {
     private func isMouseInsideMenuBarItem(ofScreen screen: NSScreen? = .main) -> Bool {
         guard
             let screen,
-            let mouseLocation = getMouseLocation(flipped: true),
-            let menuBarItems = try? MenuBarItem.getMenuBarItems(for: screen.displayID, onScreenOnly: true)
+            let mouseLocation = getMouseLocation(flipped: true)
         else {
             return false
         }
+        let menuBarItems = MenuBarItem.getMenuBarItems(for: screen.displayID, onScreenOnly: true)
         return menuBarItems.contains { $0.frame.contains(mouseLocation) }
     }
 

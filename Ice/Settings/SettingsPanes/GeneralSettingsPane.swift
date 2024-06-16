@@ -35,6 +35,9 @@ struct GeneralSettingsPane: View {
                 iceIconOptions
             }
             Section {
+                iceBarOptions
+            }
+            Section {
                 showOnClick
                 showOnHover
                 showOnScroll
@@ -133,6 +136,14 @@ struct GeneralSettingsPane: View {
                     Text("Display the icon as a monochrome image matching the system appearance")
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var iceBarOptions: some View {
+        Toggle(isOn: manager.bindings.useIceBar) {
+            Text("Use Ice Bar")
+            Text("Hidden items will be shown in a separate bar below the menu bar")
         }
     }
 

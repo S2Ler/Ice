@@ -10,8 +10,6 @@ import OSLog
 /// A representation of a section in a menu bar.
 @MainActor
 final class MenuBarSection: ObservableObject {
-    @Published private(set) var isHidden: Bool
-
     let name: Name
 
     let controlItem: ControlItem
@@ -21,6 +19,14 @@ final class MenuBarSection: ObservableObject {
     private var rehideMonitor: UniversalEventMonitor?
 
     private var cancellables = Set<AnyCancellable>()
+
+    private var useIceBar: Bool {
+        appState?.settingsManager.generalSettingsManager.useIceBar ?? false
+    }
+
+    private var iceBarPanel: IceBarPanel? {
+        appState?.menuBarManager.iceBarPanel
+    }
 
     private(set) weak var appState: AppState? {
         didSet {
@@ -35,10 +41,35 @@ final class MenuBarSection: ObservableObject {
         appState?.menuBarManager
     }
 
+    var isHidden: Bool {
+        if useIceBar {
+            if controlItem.state == .showItems {
+                return false
+            }
+            switch name {
+            case .visible, .hidden:
+                return iceBarPanel?.currentSection != .hidden
+            case .alwaysHidden:
+                return iceBarPanel?.currentSection != .alwaysHidden
+            }
+        }
+        switch name {
+        case .visible, .hidden:
+            if iceBarPanel?.currentSection == .hidden {
+                return false
+            }
+            return controlItem.state == .hideItems
+        case .alwaysHidden:
+            if iceBarPanel?.currentSection == .alwaysHidden {
+                return false
+            }
+            return controlItem.state == .hideItems
+        }
+    }
+
     init(name: Name, controlItem: ControlItem) {
         self.name = name
         self.controlItem = controlItem
-        self.isHidden = controlItem.state == .hideItems
         configureCancellables()
     }
 
@@ -57,12 +88,6 @@ final class MenuBarSection: ObservableObject {
 
     private func configureCancellables() {
         var c = Set<AnyCancellable>()
-
-        controlItem.$state
-            .sink { [weak self] state in
-                self?.isHidden = state == .hideItems
-            }
-            .store(in: &c)
 
         // propagate changes from the section's control item
         controlItem.objectWillChange
@@ -86,25 +111,49 @@ final class MenuBarSection: ObservableObject {
     /// Shows the status items in the section.
     func show() {
         guard
+            let appState,
             let menuBarManager,
-            controlItem.state == .hideItems
+            isHidden
         else {
             return
         }
         switch name {
+        case .visible where useIceBar, .hidden where useIceBar:
+            Task {
+                await appState.itemManager.rehideTemporarilyShownItems()
+                if let screen = NSScreen.main {
+                    iceBarPanel?.show(section: .hidden, on: screen)
+                }
+                for section in menuBarManager.sections {
+                    section.controlItem.state = .hideItems
+                }
+            }
+        case .alwaysHidden where useIceBar:
+            Task {
+                await appState.itemManager.rehideTemporarilyShownItems()
+                if let screen = NSScreen.main {
+                    iceBarPanel?.show(section: .alwaysHidden, on: screen)
+                }
+                for section in menuBarManager.sections {
+                    section.controlItem.state = .hideItems
+                }
+            }
         case .visible:
+            iceBarPanel?.close()
             guard let hiddenSection = menuBarManager.section(withName: .hidden) else {
                 return
             }
             controlItem.state = .showItems
             hiddenSection.controlItem.state = .showItems
         case .hidden:
+            iceBarPanel?.close()
             guard let visibleSection = menuBarManager.section(withName: .visible) else {
                 return
             }
             controlItem.state = .showItems
             visibleSection.controlItem.state = .showItems
         case .alwaysHidden:
+            iceBarPanel?.close()
             guard
                 let hiddenSection = menuBarManager.section(withName: .hidden),
                 let visibleSection = menuBarManager.section(withName: .visible)
@@ -123,11 +172,16 @@ final class MenuBarSection: ObservableObject {
         guard
             let appState,
             let menuBarManager,
-            controlItem.state == .showItems
+            !isHidden
         else {
             return
         }
+        iceBarPanel?.close()
         switch name {
+        case _ where useIceBar:
+            for section in menuBarManager.sections {
+                section.controlItem.state = .hideItems
+            }
         case .visible:
             guard
                 let hiddenSection = menuBarManager.section(withName: .hidden),
@@ -157,9 +211,10 @@ final class MenuBarSection: ObservableObject {
 
     /// Toggles the visibility of the status items in the section.
     func toggle() {
-        switch controlItem.state {
-        case .hideItems: show()
-        case .showItems: hide()
+        if isHidden {
+            show()
+        } else {
+            hide()
         }
     }
 
@@ -229,7 +284,7 @@ extension MenuBarSection: BindingExposable { }
 // MARK: MenuBarSection.Name
 extension MenuBarSection {
     /// The name of a menu bar section.
-    enum Name {
+    enum Name: CaseIterable {
         case visible
         case hidden
         case alwaysHidden
@@ -247,6 +302,14 @@ extension MenuBarSection {
             case .visible: "Visible"
             case .hidden: "Hidden"
             case .alwaysHidden: "Always-Hidden"
+            }
+        }
+
+        var logString: String {
+            switch self {
+            case .visible: "visible"
+            case .hidden: "hidden"
+            case .alwaysHidden: "always-hidden"
             }
         }
     }

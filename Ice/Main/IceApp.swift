@@ -13,6 +13,7 @@ struct IceApp: App {
 
     init() {
         NSSplitViewItem.swizzle()
+        IceBarPanel.swizzle()
         appDelegate.assignAppState(appState)
     }
 

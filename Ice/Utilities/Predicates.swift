@@ -3,7 +3,7 @@
 //  Ice
 //
 
-import CoreGraphics
+import Cocoa
 
 /// A namespace for predicates.
 enum Predicates<Input> {
@@ -24,7 +24,8 @@ enum Predicates<Input> {
     }
 }
 
-// MARK: Window Predicates
+// MARK: - Window Predicates
+
 extension Predicates where Input == WindowInfo {
     /// Creates a predicate that returns whether a window is the wallpaper window
     /// for the given display.
@@ -41,10 +42,10 @@ extension Predicates where Input == WindowInfo {
     /// the given display.
     static func menuBarWindow(for display: CGDirectDisplayID) -> NonThrowingPredicate {
         predicate { window in
-            // menu bar window belongs to the WindowServer process (owningApplication should be nil)
-            window.owningApplication == nil &&
+            // menu bar window belongs to the WindowServer process
+            window.isWindowServerWindow &&
             window.isOnScreen &&
-            window.windowLayer == kCGMainMenuWindowLevel &&
+            window.layer == kCGMainMenuWindowLevel &&
             window.title == "Menubar" &&
             CGDisplayBounds(display).contains(window.frame)
         }
@@ -58,6 +59,16 @@ extension Predicates where Input == WindowInfo {
             window.owningApplication?.bundleIdentifier == "com.apple.dock" &&
             window.title == "Fullscreen Backdrop" &&
             window.frame == CGDisplayBounds(display)
+        }
+    }
+}
+
+// MARK: - Control Item Predicates
+
+extension Predicates where Input == NSLayoutConstraint {
+    static func controlItemConstraint(button: NSStatusBarButton) -> NonThrowingPredicate {
+        predicate { constraint in
+            constraint.secondItem === button.superview
         }
     }
 }
